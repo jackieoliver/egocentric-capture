@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Record Test Video</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "SF Mono", "Monaco", monospace;
+      background: #0a0a0a;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 14px;
+      font-weight: normal;
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .video-container {
+      position: relative;
+      max-width: 960px;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    video {
+      width: 100%;
+      background: #000;
+      border: 2px solid #333;
+      border-radius: 4px;
+    }
+    video.recording {
+      border-color: #f00;
+    }
+
+    .record-indicator {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 10px 16px;
+      border-radius: 4px;
+      border: 2px solid #f00;
+    }
+    .record-indicator.active {
+      display: flex;
+    }
+
+    .record-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #f00;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .timer {
+      font-size: 20px;
+      font-weight: bold;
+      color: #f00;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 12px 30px;
+      border: 2px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #222;
+      color: #eee;
+    }
+    button:hover { background: #333; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    button.record-btn {
+      background: #a00;
+      border-color: #f00;
+      color: #fff;
+    }
+    button.record-btn:hover { background: #c00; }
+
+    button.stop-btn {
+      background: #333;
+      border-color: #666;
+    }
+
+    .status {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .countdown {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 120px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(0,0,0,0.8);
+      display: none;
+    }
+    .countdown.active {
+      display: block;
+      animation: countdown-pop 0.5s ease-out;
+    }
+    @keyframes countdown-pop {
+      0% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    .progress-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 4px;
+      background: #f00;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+  </style>
+</head>
+<body>
+  <h1>HAND TRACKING TEST VIDEO RECORDER</h1>
+
+  <div class="video-container">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="record-indicator" id="indicator">
+      <div class="record-dot"></div>
+      <div class="timer" id="timer">0:00</div>
+    </div>
+    <div class="countdown" id="countdown">3</div>
+    <div class="progress-bar" id="progress"></div>
+  </div>
+
+  <div class="controls">
+    <button id="record-btn" class="record-btn" onclick="startRecording()">Record 1 Minute</button>
+    <button id="stop-btn" class="stop-btn" onclick="stopRecording()" disabled>Stop & Save</button>
+  </div>
+
+  <div class="status" id="status">Click "Record" to start capturing</div>
+
+  <script>
+    const DURATION = 60; // 1 minute
+    let video, mediaRecorder, recordedChunks = [];
+    let timerInterval, startTime;
+    let stream;
+
+    async function init() {
+      video = document.getElementById('video');
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: false
+        });
+        video.srcObject = stream;
+        setStatus('Camera ready. Click "Record" when ready.');
+      } catch (e) {
+        setStatus('Camera access denied. Please allow camera access.');
+        document.getElementById('record-btn').disabled = true;
+      }
+    }
+
+    function setStatus(text) {
+      document.getElementById('status').textContent = text;
+    }
+
+    async function startRecording() {
+      // 3-2-1 countdown
+      const countdown = document.getElementById('countdown');
+      for (let i = 3; i >= 1; i--) {
+        countdown.textContent = i;
+        countdown.className = 'countdown active';
+        await sleep(1000);
+        countdown.className = 'countdown';
+        await sleep(100);
+      }
+
+      // Start recording
+      recordedChunks = [];
+
+      const options = { mimeType: 'video/webm;codecs=vp9' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options.mimeType = 'video/webm';
+      }
+
+      mediaRecorder = new MediaRecorder(stream, options);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        saveRecording();
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      startTime = Date.now();
+
+      // Update UI
+      video.className = 'recording';
+      document.getElementById('indicator').className = 'record-indicator active';
+      document.getElementById('record-btn').disabled = true;
+      document.getElementById('stop-btn').disabled = false;
+      setStatus('Recording... manipulate objects with your hands');
+
+      // Start timer
+      timerInterval = setInterval(updateTimer, 100);
+
+      // Auto-stop after duration
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          stopRecording();
+        }
+      }, DURATION * 1000);
+    }
+
+    function updateTimer() {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const mins = Math.floor(elapsed / 60);
+      const secs = Math.floor(elapsed % 60);
+      document.getElementById('timer').textContent =
+        `${mins}:${secs.toString().padStart(2, '0')}`;
+
+      // Update progress bar
+      const progress = Math.min(100, (elapsed / DURATION) * 100);
+      document.getElementById('progress').style.width = `${progress}%`;
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+      clearInterval(timerInterval);
+
+      // Update UI
+      video.className = '';
+      document.getElementById('indicator').className = 'record-indicator';
+      document.getElementById('record-btn').disabled = false;
+      document.getElementById('stop-btn').disabled = true;
+      document.getElementById('progress').style.width = '0%';
+      setStatus('Saving video...');
+    }
+
+    function saveRecording() {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+
+      // Generate filename with timestamp
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+      const filename = `hand_test_${timestamp}.webm`;
+
+      // Download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+
+      URL.revokeObjectURL(url);
+      setStatus(`Saved: ${filename} (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wired GoPro Dev</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Mono", monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      background: #111;
+      color: #eee;
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 18px; font-weight: normal; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    h2 { font-size: 14px; font-weight: normal; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 20px 0 10px; }
+
+    .section { margin-bottom: 30px; }
+
+    /* Buttons */
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 8px 16px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover { background: #333; border-color: #666; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: #0a0; border-color: #0c0; color: #000; font-weight: bold; }
+    button.primary:hover { background: #0c0; }
+    button.danger { background: #a00; border-color: #c00; }
+    button.danger:hover { background: #c00; }
+    button.recording { background: #c00; border-color: #f00; animation: pulse 1s infinite; }
+    button.small { font-size: 12px; padding: 4px 8px; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Camera grid */
+    .camera-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 15px;
+    }
+    .camera-card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 12px;
+    }
+    .camera-card.recording { border-color: #f00; background: #1a0a0a; }
+    .camera-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .camera-role {
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .camera-role .index { color: #666; font-size: 12px; margin-left: 8px; }
+    .camera-meta { color: #888; font-size: 12px; }
+    .camera-stream {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      margin-top: 8px;
+      display: block;
+    }
+    .camera-controls {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .recording-indicator {
+      color: #f66;
+      font-size: 12px;
+      animation: pulse 1s infinite;
+    }
+    .frame-count {
+      color: #888;
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    /* Status bar */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      margin-bottom: 20px;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #0f0;
+    }
+    .status-dot.recording { background: #f00; animation: pulse 1s infinite; }
+    .status-dot.no-cameras { background: #888; }
+
+    /* Global controls */
+    .global-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* Messages */
+    .message {
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid;
+    }
+    .message.error { background: #300; border-color: #600; color: #faa; }
+    .message.success { background: #030; border-color: #060; color: #afa; }
+
+    /* No cameras */
+    .no-cameras {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+    .no-cameras h2 { color: #666; margin-bottom: 20px; }
+    .no-cameras p { margin-bottom: 15px; }
+    .no-cameras code {
+      background: #222;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    /* Role selector */
+    select {
+      font-family: inherit;
+      font-size: 12px;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 4px 8px;
+    }
+
+    /* Storage section */
+    .storage-section {
+      margin-top: 30px;
+      border-top: 1px solid #333;
+      padding-top: 20px;
+    }
+    .storage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .storage-stats {
+      display: flex;
+      gap: 20px;
+      color: #888;
+      font-size: 13px;
+    }
+    .storage-stats .warn { color: #fa0; }
+    .storage-stats .danger { color: #f44; }
+    .recordings-list {
+      background: #1a1a1a;
+      border: 1px solid #333;
+    }
+    .recording-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid #333;
+    }
+    .recording-item:last-child { border-bottom: none; }
+    .recording-info {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+    .recording-name { font-weight: bold; }
+    .recording-meta { color: #888; font-size: 12px; }
+    .recording-size {
+      color: #888;
+      font-size: 12px;
+      min-width: 60px;
+    }
+    .no-recordings {
+      padding: 20px;
+      text-align: center;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>WIRED GOPRO DEV</h1>
+
+  <div id="message"></div>
+
+  <div class="status-bar">
+    <div class="status-indicator">
+      <span id="status-dot" class="status-dot no-cameras"></span>
+      <span id="status-text">Scanning cameras...</span>
+    </div>
+    <div class="global-controls">
+      <button onclick="rescan()">Rescan</button>
+      <button id="record-all-btn" class="primary" onclick="toggleRecordAll()">
+        RECORD ALL
+      </button>
+    </div>
+  </div>
+
+  <div id="cameras-container"></div>
+
+  <!-- Storage/Recordings Section -->
+  <div class="storage-section">
+    <div class="storage-header">
+      <h2>RECORDINGS</h2>
+      <div class="storage-stats" id="storage-stats">
+        Loading...
+      </div>
+    </div>
+    <div id="recordings-container">
+      <div class="recordings-list">
+        <div class="no-recordings">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      cameras: [],
+      anyRecording: false,
+    };
+
+    async function api(endpoint, method = 'GET', body = null) {
+      const opts = { method, headers: {} };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(endpoint, opts);
+      return res.json();
+    }
+
+    function showMessage(text, type = 'error') {
+      const el = document.getElementById('message');
+      el.innerHTML = `<div class="message ${type}">${text}</div>`;
+      setTimeout(() => el.innerHTML = '', 5000);
+    }
+
+    function render() {
+      const container = document.getElementById('cameras-container');
+      const statusDot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      const recordAllBtn = document.getElementById('record-all-btn');
+
+      state.anyRecording = state.cameras.some(c => c.recording);
+
+      // Update status bar
+      if (state.cameras.length === 0) {
+        statusDot.className = 'status-dot no-cameras';
+        statusText.textContent = 'No cameras detected';
+        recordAllBtn.disabled = true;
+      } else if (state.anyRecording) {
+        statusDot.className = 'status-dot recording';
+        statusText.textContent = `Recording (${state.cameras.filter(c => c.recording).length}/${state.cameras.length} cameras)`;
+        recordAllBtn.textContent = 'STOP ALL';
+        recordAllBtn.className = 'danger recording';
+        recordAllBtn.disabled = false;
+      } else {
+        statusDot.className = 'status-dot';
+        statusText.textContent = `${state.cameras.length} camera${state.cameras.length > 1 ? 's' : ''} connected`;
+        recordAllBtn.textContent = 'RECORD ALL';
+        recordAllBtn.className = 'primary';
+        recordAllBtn.disabled = false;
+      }
+
+      // Render cameras
+      if (state.cameras.length === 0) {
+        container.innerHTML = `
+          <div class="no-cameras">
+            <h2>NO GOPRO WEBCAMS DETECTED</h2>
+            <p>Make sure:</p>
+            <p>1. GoPro is connected via USB-C</p>
+            <p>2. GoPro Webcam app is running</p>
+            <p>3. Camera shows as "GoPro Webcam" in system</p>
+            <p style="margin-top: 20px;">
+              <button onclick="rescan()">Rescan for Cameras</button>
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="camera-grid">
+          ${state.cameras.map(cam => renderCamera(cam)).join('')}
+        </div>
+      `;
+
+      // Update stream sources (only if not already set)
+      state.cameras.forEach(cam => {
+        const img = document.getElementById(`stream-${cam.index}`);
+        if (img && !img.src.includes('/api/stream/')) {
+          img.src = `/api/stream/${cam.index}`;
+        }
+      });
+    }
+
+    function renderCamera(cam) {
+      return `
+        <div class="camera-card ${cam.recording ? 'recording' : ''}" id="card-${cam.index}">
+          <div class="camera-header">
+            <div class="camera-role">
+              ${cam.role}
+              <span class="index">(Camera ${cam.index})</span>
+            </div>
+            <select onchange="assignRole(${cam.index}, this.value)" title="Change role">
+              <option value="HEAD" ${cam.role === 'HEAD' ? 'selected' : ''}>HEAD</option>
+              <option value="LWRIST" ${cam.role === 'LWRIST' ? 'selected' : ''}>LWRIST</option>
+              <option value="RWRIST" ${cam.role === 'RWRIST' ? 'selected' : ''}>RWRIST</option>
+            </select>
+          </div>
+          <img id="stream-${cam.index}" class="camera-stream" alt="Stream">
+          <div class="camera-controls">
+            ${cam.recording ? `
+              <button class="danger recording" onclick="stopRecording(${cam.index})">
+                STOP
+              </button>
+              <span class="recording-indicator">REC</span>
+            ` : `
+              <button class="primary" onclick="startRecording(${cam.index})">
+                RECORD
+              </button>
+            `}
+            <span class="frame-count" id="frames-${cam.index}">
+              ${cam.recording ? `${cam.frame_count} frames` : ''}
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function refresh() {
+      try {
+        const data = await api('/api/status');
+        state.cameras = data.cameras || [];
+        render();
+      } catch (e) {
+        console.error('Refresh failed:', e);
+      }
+    }
+
+    async function rescan() {
+      showMessage('Rescanning for cameras...', 'success');
+      try {
+        const data = await api('/api/rescan', 'POST');
+        state.cameras = data.cameras || [];
+        render();
+        if (state.cameras.length > 0) {
+          showMessage(`Found ${state.cameras.length} camera(s)`, 'success');
+        } else {
+          showMessage('No cameras found');
+        }
+      } catch (e) {
+        showMessage('Rescan failed: ' + e.message);
+      }
+    }
+
+    async function startRecording(index) {
+      try {
+        const res = await api(`/api/record/start/${index}`, 'POST');
+        if (res.ok) {
+          showMessage(`Recording started: ${res.role}`, 'success');
+          refresh();
+        } else {
+          showMessage(res.error || 'Failed to start recording');
+        }
+      } catch (e) {
+        showMessage('Error: ' + e.message);
+      }
+    }
+
+    async function stopRecording(index) {
+      try {
+        const res = await api(`/api/record/stop/${index}`, 'POST');
+        if (res.ok) {
+          showMessage(`Recording saved: ${res.path} (${res.frames} frames)`, 'success');
+          refresh();
+        } else {
+          showMessage(res.error || 'Failed to stop recording');
+        }
+      } catch (e) {
+        showMessage('Error: ' + e.message);
+      }
+    }
+
+    async function toggleRecordAll() {
+      if (state.anyRecording) {
+        // Stop all
+        try {
+          const res = await api('/api/record/stop-all', 'POST');
+          showMessage('All recordings stopped', 'success');
+          refresh();
+        } catch (e) {
+          showMessage('Error: ' + e.message);
+        }
+      } else {
+        // Start all
+        try {
+          const res = await api('/api/record/start-all', 'POST');
+          if (res.ok) {
+            showMessage('Recording all cameras', 'success');
+          } else {
+            showMessage('Some cameras failed to start');
+          }
+          refresh();
+        } catch (e) {
+          showMessage('Error: ' + e.message);
+        }
+      }
+    }
+
+    async function assignRole(index, role) {
+      try {
+        await api(`/api/assign-role/${index}`, 'POST', { role });
+        refresh();
+      } catch (e) {
+        showMessage('Error: ' + e.message);
+      }
+    }
+
+    // ============ Recordings Management ============
+
+    let recordings = [];
+    let storage = {};
+
+    async function loadRecordings() {
+      try {
+        const data = await api('/api/recordings');
+        recordings = data.recordings || [];
+        storage = data.storage || {};
+        renderRecordings();
+      } catch (e) {
+        console.error('Failed to load recordings:', e);
+      }
+    }
+
+    function renderRecordings() {
+      const container = document.getElementById('recordings-container');
+      const statsEl = document.getElementById('storage-stats');
+
+      // Render storage stats
+      let sizeClass = '';
+      if (storage.total_mb > 1000) sizeClass = 'danger';
+      else if (storage.total_mb > 500) sizeClass = 'warn';
+
+      statsEl.innerHTML = `
+        <span>${storage.total_files || 0} files</span>
+        <span class="${sizeClass}">${storage.total_mb || 0} MB used</span>
+        ${recordings.length > 0 ? `<button class="small danger" onclick="clearAllRecordings()">Clear All</button>` : ''}
+      `;
+
+      // Render recordings list
+      if (recordings.length === 0) {
+        container.innerHTML = `
+          <div class="recordings-list">
+            <div class="no-recordings">No recordings yet</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="recordings-list">
+          ${recordings.map(rec => `
+            <div class="recording-item">
+              <div class="recording-info">
+                <span class="recording-name">${rec.filename}</span>
+                <span class="recording-meta">${rec.created}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="recording-size">${rec.size_mb} MB</span>
+                <button class="small danger" onclick="deleteRecording('${rec.filename}')">Delete</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    async function deleteRecording(filename) {
+      try {
+        const res = await api(`/api/recordings/delete/${filename}`, 'POST');
+        if (res.ok) {
+          showMessage(`Deleted: ${filename}`, 'success');
+          loadRecordings();
+        } else {
+          showMessage(res.error || 'Failed to delete');
+        }
+      } catch (e) {
+        showMessage('Error: ' + e.message);
+      }
+    }
+
+    async function clearAllRecordings() {
+      if (!confirm('Delete ALL recordings? This cannot be undone.')) return;
+
+      try {
+        const res = await api('/api/recordings/clear-all', 'POST');
+        if (res.ok) {
+          showMessage(`Deleted ${res.deleted.length} recordings`, 'success');
+          loadRecordings();
+        } else {
+          showMessage('Some files failed to delete');
+        }
+      } catch (e) {
+        showMessage('Error: ' + e.message);
+      }
+    }
+
+    // Initialize
+    refresh();
+    loadRecordings();
+    setInterval(refresh, 2000);
+    setInterval(loadRecordings, 5000);  // Refresh recordings every 5s
+  </script>
+</body>
+</html>

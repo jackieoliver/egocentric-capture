@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Overlay Test</title>
+    <style>
+        body { margin: 0; background: #000; }
+        .container { 
+            width: 960px; 
+            height: 540px; 
+            position: relative; 
+            margin: 20px auto;
+            border: 2px solid red;
+        }
+        video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+        }
+        .info { color: white; padding: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="info" id="info">Loading...</div>
+    <div class="container">
+        <video id="video" src="head_quarter.mp4" muted></video>
+        <canvas id="canvas"></canvas>
+    </div>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        
+        // Known wrist positions from JSON (frame 0)
+        const leftWrist = [583.9635, 475.6274];
+        const rightWrist = [1473.2021, 443.6474];
+        const intrinsicW = 1920, intrinsicH = 1080;
+        
+        video.onloadedmetadata = () => {
+            const rect = video.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            const videoAspect = video.videoWidth / video.videoHeight;
+            const containerAspect = rect.width / rect.height;
+            
+            let displayW, displayH, offX, offY;
+            if (containerAspect > videoAspect) {
+                displayH = rect.height;
+                displayW = displayH * videoAspect;
+                offX = (rect.width - displayW) / 2;
+                offY = 0;
+            } else {
+                displayW = rect.width;
+                displayH = displayW / videoAspect;
+                offX = 0;
+                offY = (rect.height - displayH) / 2;
+            }
+            
+            const scaleX = (displayW * dpr) / intrinsicW;
+            const scaleY = (displayH * dpr) / intrinsicH;
+            const offXPx = offX * dpr;
+            const offYPx = offY * dpr;
+            
+            info.textContent = `Video: ${video.videoWidth}x${video.videoHeight}, ` +
+                `Container: ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}, ` +
+                `Display: ${displayW.toFixed(1)}x${displayH.toFixed(1)}, ` +
+                `Offset: (${offX.toFixed(1)}, ${offY.toFixed(1)}), ` +
+                `Scale: ${scaleX.toFixed(4)}, DPR: ${dpr}`;
+            
+            // Draw video bounds (green)
+            ctx.strokeStyle = 'lime';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(offXPx, offYPx, displayW * dpr, displayH * dpr);
+            
+            // Draw wrists as large circles
+            ctx.fillStyle = 'blue';
+            ctx.beginPath();
+            ctx.arc(leftWrist[0] * scaleX + offXPx, leftWrist[1] * scaleY + offYPx, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'cyan';
+            ctx.beginPath();
+            ctx.arc(rightWrist[0] * scaleX + offXPx, rightWrist[1] * scaleY + offYPx, 15, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw crosshairs at wrist positions
+            ctx.strokeStyle = 'yellow';
+            ctx.lineWidth = 1;
+            const lx = leftWrist[0] * scaleX + offXPx;
+            const ly = leftWrist[1] * scaleY + offYPx;
+            ctx.beginPath();
+            ctx.moveTo(lx - 30, ly); ctx.lineTo(lx + 30, ly);
+            ctx.moveTo(lx, ly - 30); ctx.lineTo(lx, ly + 30);
+            ctx.stroke();
+            
+            const rx = rightWrist[0] * scaleX + offXPx;
+            const ry = rightWrist[1] * scaleY + offYPx;
+            ctx.beginPath();
+            ctx.moveTo(rx - 30, ry); ctx.lineTo(rx + 30, ry);
+            ctx.moveTo(rx, ry - 30); ctx.lineTo(rx, ry + 30);
+            ctx.stroke();
+        };
+    </script>
+</body>
+</html>

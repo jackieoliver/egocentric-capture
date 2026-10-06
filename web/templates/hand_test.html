@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hand Tracking Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "SF Mono", "Monaco", monospace;
+      font-size: 14px;
+      background: #0a0a0a;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 15px 20px;
+      background: #111;
+      border-bottom: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 { font-size: 16px; font-weight: normal; }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 13px;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    button:hover { background: #333; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: #0a0; border-color: #0c0; color: #000; font-weight: bold; }
+    button.primary:hover { background: #0c0; }
+    button.danger { background: #a00; border-color: #c00; }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #888;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #444;
+    }
+    .status-dot.active { background: #0f0; }
+    .status-dot.error { background: #f00; }
+    .status-dot.detecting { background: #0af; animation: pulse 0.5s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .video-container {
+      position: relative;
+      max-width: 960px;
+      width: 100%;
+    }
+
+    video {
+      display: none; /* Hidden, only used for capture */
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      background: #000;
+      border: 2px solid #333;
+      border-radius: 4px;
+    }
+
+    /* Overlay canvas for skeleton - positioned exactly on top of video canvas */
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: auto;
+      pointer-events: none;
+      background: transparent;
+      border: none;
+    }
+
+    .overlay-stats {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #0f0;
+      min-width: 180px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .stat-label { color: #888; }
+    .stat-value { color: #0f0; font-weight: bold; }
+    .stat-value.warn { color: #fa0; }
+    .stat-value.error { color: #f00; }
+
+    .hand-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    .hand-badge {
+      background: rgba(0, 0, 0, 0.8);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      border: 2px solid #333;
+    }
+    .hand-badge.detected { border-color: #0f0; color: #0f0; }
+    .hand-badge.left { border-color: #f0f; color: #f0f; }
+    .hand-badge.right { border-color: #0ff; color: #0ff; }
+
+    .no-camera {
+      text-align: center;
+      color: #666;
+      padding: 100px 20px;
+    }
+    .no-camera h2 { margin-bottom: 20px; color: #888; }
+    .no-camera p { margin-bottom: 10px; }
+
+    footer {
+      padding: 10px 20px;
+      background: #111;
+      border-top: 1px solid #333;
+      font-size: 11px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Skeleton colors */
+    .skeleton-left { stroke: #f0f; }
+    .skeleton-right { stroke: #0ff; }
+    .joint-left { fill: #f0f; }
+    .joint-right { fill: #0ff; }
+
+    /* Per-Hand Data Panels */
+    .hand-data-panel {
+      position: absolute;
+      top: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      min-width: 140px;
+      border: 1px solid #333;
+    }
+    .left-panel { left: 10px; border-left: 3px solid #f0f; }
+    .right-panel { right: 10px; border-left: 3px solid #0ff; }
+
+    .hand-title {
+      font-weight: bold;
+      font-size: 12px;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+    .left-panel .hand-title { color: #f0f; }
+    .right-panel .hand-title { color: #0ff; }
+
+    .hand-confidence {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .left-panel .hand-confidence { color: #f0f; }
+    .right-panel .hand-confidence { color: #0ff; }
+
+    .coord-section {
+      margin-bottom: 8px;
+    }
+    .coord-label {
+      color: #666;
+      font-size: 10px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .coord-value {
+      color: #aaa;
+      font-family: "SF Mono", monospace;
+    }
+    .fingertip-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+    .fingertip {
+      font-size: 9px;
+      color: #888;
+      text-align: center;
+    }
+    .fingertip::before {
+      content: attr(data-finger) ": ";
+      display: block;
+      color: #555;
+      font-size: 8px;
+    }
+
+    /* Tracking Status Overlay */
+    .tracking-status {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 8px 20px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #0f0;
+      border: 1px solid #0f0;
+    }
+    .tracking-status.no-hand {
+      color: #888;
+      border-color: #444;
+    }
+
+    /* Recording UI */
+    button.record { background: #333; border-color: #666; }
+    button.record:hover { background: #444; }
+    button.record.recording {
+      background: #a00;
+      border-color: #f00;
+      animation: record-pulse 1s infinite;
+    }
+    @keyframes record-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .record-indicator {
+      position: absolute;
+      top: 50%;
+      right: 20px;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 8px 14px;
+      border-radius: 4px;
+      border: 2px solid #f00;
+    }
+    .record-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #f00;
+      animation: record-pulse 1s infinite;
+    }
+    .record-timer {
+      font-size: 16px;
+      font-weight: bold;
+      color: #f00;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .video-container.recording {
+      border-color: #f00;
+    }
+    .video-container.recording canvas {
+      border-color: #f00;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>HAND TRACKING TEST</h1>
+    <div class="controls">
+      <div class="status">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-text">Initializing...</span>
+      </div>
+      <button id="start-btn" class="primary" onclick="toggleTracking()">Start</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="video-container">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas"></canvas>
+      <canvas id="overlay"></canvas>
+
+      <!-- Stats Panel -->
+      <div class="overlay-stats" id="stats" style="display: none;">
+        <div class="stat-row">
+          <span class="stat-label">Confidence</span>
+          <span class="stat-value" id="stat-confidence">--%</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Joints</span>
+          <span class="stat-value" id="stat-joints">21</span>
+        </div>
+      </div>
+
+      <!-- Per-Hand Data Panels -->
+      <div class="hand-data-panel left-panel" id="left-panel" style="display: none;">
+        <div class="hand-title">LEFT</div>
+        <div class="hand-confidence" id="left-confidence">--%</div>
+        <div class="coord-section">
+          <div class="coord-label">Wrist</div>
+          <div class="coord-value" id="left-wrist">--</div>
+        </div>
+        <div class="coord-section">
+          <div class="coord-label">Fingertips</div>
+          <div class="fingertip-grid" id="left-fingertips">
+            <span class="fingertip" data-finger="thumb">--</span>
+            <span class="fingertip" data-finger="index">--</span>
+            <span class="fingertip" data-finger="middle">--</span>
+            <span class="fingertip" data-finger="ring">--</span>
+            <span class="fingertip" data-finger="little">--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hand-data-panel right-panel" id="right-panel" style="display: none;">
+        <div class="hand-title">RIGHT</div>
+        <div class="hand-confidence" id="right-confidence">--%</div>
+        <div class="coord-section">
+          <div class="coord-label">Wrist</div>
+          <div class="coord-value" id="right-wrist">--</div>
+        </div>
+        <div class="coord-section">
+          <div class="coord-label">Fingertips</div>
+          <div class="fingertip-grid" id="right-fingertips">
+            <span class="fingertip" data-finger="thumb">--</span>
+            <span class="fingertip" data-finger="index">--</span>
+            <span class="fingertip" data-finger="middle">--</span>
+            <span class="fingertip" data-finger="ring">--</span>
+            <span class="fingertip" data-finger="little">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracking Status Overlay -->
+      <div class="tracking-status" id="tracking-status" style="display: none;">
+        <span id="tracking-text">Place hand in frame</span>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>Apple Vision Framework (VNDetectHumanHandPoseRequest)</span>
+    <span id="resolution">--</span>
+  </footer>
+
+  <script>
+    // State
+    let isTracking = false;
+    let video, canvas, ctx;
+    let overlay, overlayCtx;  // Separate canvas for skeleton overlay
+
+    // Hand skeleton connections (finger chains)
+    const FINGER_CONNECTIONS = {
+      thumb: ['wrist', 'thumbCMC', 'thumbMP', 'thumbIP', 'thumbTip'],
+      index: ['wrist', 'indexMCP', 'indexPIP', 'indexDIP', 'indexTip'],
+      middle: ['wrist', 'middleMCP', 'middlePIP', 'middleDIP', 'middleTip'],
+      ring: ['wrist', 'ringMCP', 'ringPIP', 'ringDIP', 'ringTip'],
+      little: ['wrist', 'littleMCP', 'littlePIP', 'littleDIP', 'littleTip'],
+    };
+
+    // Initialize
+    async function init() {
+      video = document.getElementById('video');
+      canvas = document.getElementById('canvas');
+      ctx = canvas.getContext('2d');
+      overlay = document.getElementById('overlay');
+      overlayCtx = overlay.getContext('2d');
+
+      updateStatus('ready', 'Ready - Click Start');
+    }
+
+    function updateStatus(state, text) {
+      const dot = document.getElementById('status-dot');
+      const textEl = document.getElementById('status-text');
+      dot.className = 'status-dot ' + state;
+      textEl.textContent = text;
+    }
+
+    async function toggleTracking() {
+      const btn = document.getElementById('start-btn');
+
+      if (isTracking) {
+        stopTracking();
+        btn.textContent = 'Start';
+        btn.className = 'primary';
+      } else {
+        const started = await startTracking();
+        if (started) {
+          btn.textContent = 'Stop';
+          btn.className = 'danger';
+        }
+      }
+    }
+
+    async function startTracking() {
+      updateStatus('active', 'Requesting camera...');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          }
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        // Set canvas size to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        // Set overlay canvas to same size
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+        document.getElementById('resolution').textContent =
+          `${video.videoWidth}x${video.videoHeight}`;
+
+        isTracking = true;
+        document.getElementById('stats').style.display = 'block';
+        document.getElementById('tracking-status').style.display = 'block';
+
+        updateStatus('detecting', 'Tracking...');
+        processFrame();
+        return true;
+
+      } catch (e) {
+        console.error('Camera error:', e);
+        updateStatus('error', 'Camera access denied');
+        return false;
+      }
+    }
+
+    function stopTracking() {
+      isTracking = false;
+
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+
+      document.getElementById('stats').style.display = 'none';
+      document.getElementById('tracking-status').style.display = 'none';
+      document.getElementById('left-panel').style.display = 'none';
+      document.getElementById('right-panel').style.display = 'none';
+      updateStatus('ready', 'Stopped');
+    }
+
+    async function processFrame() {
+      if (!isTracking) return;
+
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0);
+
+      // Get frame as JPEG
+      const blob = await new Promise(resolve =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.8)
+      );
+
+      try {
+        // Send to server for detection
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+
+        const response = await fetch('/api/detect', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        // Update UI with detection results
+        updateStats(data);
+
+        // Draw skeleton overlay
+        drawSkeleton(data);
+
+      } catch (e) {
+        console.error('Detection error:', e);
+      }
+
+      // Continue processing
+      if (isTracking) {
+        requestAnimationFrame(processFrame);
+      }
+    }
+
+    function updateStats(data) {
+      const hands = data.hands || [];
+      const leftHand = hands.find(h => h.chirality === 'left');
+      const rightHand = hands.find(h => h.chirality === 'right');
+
+      // Overall confidence
+      if (hands.length > 0) {
+        const avgConf = hands.reduce((sum, h) => sum + (h.avgConfidence || 0), 0) / hands.length;
+        document.getElementById('stat-confidence').textContent = Math.round(avgConf * 100) + '%';
+      } else {
+        document.getElementById('stat-confidence').textContent = '--%';
+      }
+
+      // Tracking status
+      const trackingStatus = document.getElementById('tracking-status');
+      const trackingText = document.getElementById('tracking-text');
+      if (hands.length > 0) {
+        trackingText.textContent = 'Tracking...';
+        trackingStatus.className = 'tracking-status';
+      } else {
+        trackingText.textContent = 'Place hand in frame';
+        trackingStatus.className = 'tracking-status no-hand';
+      }
+
+      // Update left hand panel
+      const leftPanel = document.getElementById('left-panel');
+      if (leftHand) {
+        leftPanel.style.display = 'block';
+        document.getElementById('left-confidence').textContent =
+          Math.round((leftHand.avgConfidence || 0) * 100) + '%';
+        updateHandCoords('left', leftHand);
+      } else {
+        leftPanel.style.display = 'none';
+      }
+
+      // Update right hand panel
+      const rightPanel = document.getElementById('right-panel');
+      if (rightHand) {
+        rightPanel.style.display = 'block';
+        document.getElementById('right-confidence').textContent =
+          Math.round((rightHand.avgConfidence || 0) * 100) + '%';
+        updateHandCoords('right', rightHand);
+      } else {
+        rightPanel.style.display = 'none';
+      }
+    }
+
+    function updateHandCoords(side, hand) {
+      // Wrist coordinates
+      const wrist = hand.wrist;
+      const wristEl = document.getElementById(`${side}-wrist`);
+      if (wrist) {
+        wristEl.textContent = `(${wrist.x.toFixed(2)}, ${wrist.y.toFixed(2)})`;
+      } else {
+        wristEl.textContent = '--';
+      }
+
+      // Fingertip coordinates
+      const fingertips = ['thumb', 'index', 'middle', 'ring', 'little'];
+      const container = document.getElementById(`${side}-fingertips`);
+      const spans = container.querySelectorAll('.fingertip');
+
+      fingertips.forEach((finger, i) => {
+        const tip = hand[finger + 'Tip'];
+        if (tip) {
+          spans[i].textContent = `${tip.x.toFixed(2)}`;
+        } else {
+          spans[i].textContent = '--';
+        }
+      });
+    }
+
+    function drawSkeleton(data) {
+      // Clear overlay before drawing new skeleton
+      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+      const hands = data.hands || [];
+
+      // Draw skeleton for each hand
+      for (const hand of hands) {
+        const color = hand.chirality === 'left' ? '#f0f' : '#0ff';
+        drawHand(hand, color);
+      }
+    }
+
+    function drawHand(hand, color) {
+      overlayCtx.strokeStyle = color;
+      overlayCtx.fillStyle = color;
+      overlayCtx.lineWidth = 4;
+      overlayCtx.lineCap = 'round';
+
+      const allJoints = [
+        'wrist',
+        'thumbCMC', 'thumbMP', 'thumbIP', 'thumbTip',
+        'indexMCP', 'indexPIP', 'indexDIP', 'indexTip',
+        'middleMCP', 'middlePIP', 'middleDIP', 'middleTip',
+        'ringMCP', 'ringPIP', 'ringDIP', 'ringTip',
+        'littleMCP', 'littlePIP', 'littleDIP', 'littleTip'
+      ];
+
+      // Draw joints as circles
+      for (const jointName of allJoints) {
+        const joint = hand[jointName];
+        if (!joint) continue;
+        if (!Number.isFinite(joint.x) || !Number.isFinite(joint.y)) continue;
+        if (joint.confidence < 0.1) continue;
+
+        // Flip Y for coordinate system (Vision=bottom-left, Canvas=top-left)
+        const x = joint.x * overlay.width;
+        const y = (1 - joint.y) * overlay.height;
+        const radius = jointName.includes('Tip') ? 12 : 8;
+
+        // Draw joint circle
+        overlayCtx.fillStyle = color;
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
+        overlayCtx.fill();
+
+        // White outline for visibility
+        overlayCtx.strokeStyle = '#fff';
+        overlayCtx.lineWidth = 2;
+        overlayCtx.stroke();
+      }
+
+      // Draw finger connections
+      overlayCtx.strokeStyle = color;
+      overlayCtx.lineWidth = 4;
+      for (const [finger, joints] of Object.entries(FINGER_CONNECTIONS)) {
+        overlayCtx.beginPath();
+        let started = false;
+
+        for (const jointName of joints) {
+          const joint = hand[jointName];
+          if (!joint) continue;
+          if (!Number.isFinite(joint.x) || !Number.isFinite(joint.y)) continue;
+          if (joint.confidence < 0.1) continue;
+
+          const x = joint.x * overlay.width;
+          const y = (1 - joint.y) * overlay.height;
+
+          if (!started) {
+            overlayCtx.moveTo(x, y);
+            started = true;
+          } else {
+            overlayCtx.lineTo(x, y);
+          }
+        }
+        overlayCtx.stroke();
+      }
+    }
+
+    // Start on load
+    window.onload = init;
+  </script>
+</body>
+</html>

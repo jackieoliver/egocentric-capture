@@ -1,0 +1,36 @@
+{
+  "name": "haptica-recorder-electron",
+  "private": true,
+  "version": "0.1.0",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "electron . --device=dummy --mock",
+    "dev:gopro": "electron . --device=gopro",
+    "pack:mac": "electron-builder --mac --dir",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "ai.haptica.recorder",
+    "productName": "Haptica Recorder",
+    "mac": {
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "target": [
+        "dmg"
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "Used for live preview during capture.",
+        "NSMicrophoneUsageDescription": "Used for audio capture during recording.",
+        "NSBluetoothAlwaysUsageDescription": "Used to connect to GoPro cameras over Bluetooth.",
+        "NSLocalNetworkUsageDescription": "Used to communicate with local camera devices and preview streams."
+      }
+    }
+  }
+}

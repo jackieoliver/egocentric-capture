@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcriptions</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Mono", monospace;
+      font-size: 14px;
+      line-height: 1.5;
+      background: #111;
+      color: #eee;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 18px; font-weight: normal; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    h2 { font-size: 14px; font-weight: normal; text-transform: uppercase; letter-spacing: 1px; color: #888; margin: 20px 0 10px; }
+
+    .section { margin-bottom: 30px; }
+
+    /* Status indicator */
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .status-dot.ok { background: #0f0; }
+    .status-dot.error { background: #f00; }
+    .status-dot.recording { background: #f00; animation: pulse 1s infinite; }
+    .status-dot.idle { background: #0f0; }
+    .status-dot.unknown { background: #888; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Buttons */
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 8px 16px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover { background: #333; border-color: #666; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: #0a0; border-color: #0c0; color: #000; font-weight: bold; }
+    button.primary:hover { background: #0c0; }
+    button.danger { background: #a00; border-color: #c00; }
+    button.danger:hover { background: #c00; }
+    button.recording { background: #c00; border-color: #f00; animation: pulse 1s infinite; }
+
+    /* Inputs */
+    input, select {
+      font-family: inherit;
+      font-size: 14px;
+      background: #222;
+      color: #eee;
+      border: 1px solid #444;
+      padding: 8px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    input:focus, select:focus { outline: none; border-color: #888; }
+    input::placeholder { color: #666; }
+
+    /* Camera grid */
+    .camera-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 10px;
+    }
+    .camera-card {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 12px;
+    }
+    .camera-card.recording { border-color: #f00; }
+    .camera-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .camera-role { font-weight: bold; }
+    .camera-stats { color: #888; font-size: 12px; }
+    .camera-stats span { margin-right: 12px; }
+    .camera-stream {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      margin-top: 8px;
+      display: block;
+    }
+    .camera-stream.hidden { display: none; }
+    .stream-toggle {
+      font-size: 11px;
+      padding: 4px 8px;
+      margin: 0;
+    }
+
+    /* Take list */
+    .take-list { border: 1px solid #333; }
+    .take-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #333;
+    }
+    .take-item:last-child { border-bottom: none; }
+    .take-item.recording { background: #300; }
+    .take-number { font-weight: bold; }
+    .take-label { color: #888; margin-left: 8px; }
+    .take-duration { color: #888; }
+
+    /* Session info */
+    .session-info {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      padding: 12px;
+      margin-bottom: 20px;
+    }
+    .session-id { font-weight: bold; }
+    .session-meta { color: #888; font-size: 12px; margin-top: 4px; }
+
+    /* Error/message */
+    .message {
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid;
+    }
+    .message.error { background: #300; border-color: #600; color: #faa; }
+    .message.success { background: #030; border-color: #060; color: #afa; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: #1a1a1a;
+      border: 1px solid #444;
+      padding: 20px;
+      max-width: 400px;
+      width: 90%;
+    }
+    .modal h2 { margin-bottom: 15px; }
+    .modal-actions { margin-top: 15px; }
+
+    /* No session state */
+    .no-session {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+
+    /* Loading */
+    .loading { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>TRANSCRIPTIONS</h1>
+
+  <div id="message"></div>
+
+  <div id="app" class="loading">Loading...</div>
+
+  <!-- New Session Modal -->
+  <div id="new-session-modal" class="modal-overlay">
+    <div class="modal">
+      <h2>NEW SESSION</h2>
+      <div>
+        <input type="text" id="session-name" placeholder="Session name (optional)">
+      </div>
+      <div>
+        <input type="text" id="session-participant" placeholder="Participant ID">
+      </div>
+      <div class="modal-actions">
+        <button class="primary" onclick="createSession()">Create</button>
+        <button onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Force Start Modal -->
+  <div id="force-start-modal" class="modal-overlay">
+    <div class="modal">
+      <h2>DEVICES NOT READY</h2>
+      <div id="force-start-message" style="color: #f88; margin-bottom: 15px;"></div>
+      <div class="modal-actions">
+        <button class="primary" onclick="confirmForceStart()">Continue Anyway</button>
+        <button onclick="closeForceModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      daemon: { ok: false },
+      session: null,
+      cameras: [],
+      takes: [],
+      is_recording: false,
+      current_take: null,
+    };
+
+    let pollInterval = null;
+
+    // API helpers
+    async function api(endpoint, method = 'GET', body = null) {
+      const opts = { method, headers: {} };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(endpoint, opts);
+      return res.json();
+    }
+
+    function showMessage(text, type = 'error') {
+      const el = document.getElementById('message');
+      el.innerHTML = `<div class="message ${type}">${text}</div>`;
+      setTimeout(() => el.innerHTML = '', 5000);
+    }
+
+    // Render functions
+    function render() {
+      const app = document.getElementById('app');
+
+      if (!state.daemon.ok) {
+        app.innerHTML = `
+          <div class="no-session">
+            <span class="status-dot error"></span>
+            Daemon not connected
+            <div style="margin-top: 10px; font-size: 12px;">
+              Run: <code>gopro daemon start</code>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      if (!state.session) {
+        app.innerHTML = `
+          <div class="no-session">
+            No active session
+            <div style="margin-top: 20px;">
+              <button class="primary" onclick="openNewSessionModal()">New Session</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      app.innerHTML = `
+        ${renderSession()}
+        ${renderControls()}
+        ${renderCameras()}
+        ${renderTakes()}
+      `;
+    }
+
+    function renderSession() {
+      const s = state.session;
+      return `
+        <div class="session-info">
+          <div class="session-id">${s.session_id}</div>
+          <div class="session-meta">
+            ${s.participant ? `Participant: ${s.participant}` : ''}
+            ${s.participant && s.take_count ? ' | ' : ''}
+            ${s.take_count} takes
+          </div>
+        </div>
+      `;
+    }
+
+    function renderControls() {
+      const recording = state.is_recording;
+      return `
+        <div class="section">
+          <h2>Controls</h2>
+          ${recording ? `
+            <button class="danger recording" onclick="stopTake()">
+              STOP RECORDING
+            </button>
+            <span style="color: #f66;">Take ${state.current_take?.take_number || '?'} recording...</span>
+          ` : `
+            <button class="primary" onclick="startTake()">
+              START TAKE
+            </button>
+            <input type="text" id="take-label" placeholder="Label (optional)" style="width: 150px;">
+          `}
+          <div style="margin-top: 15px;">
+            <button onclick="openNewSessionModal()">New Session</button>
+            <button onclick="closeSession()">Close Session</button>
+          </div>
+        </div>
+      `;
+    }
+
+    let streamsEnabled = {};  // port -> boolean
+
+    function toggleStream(port) {
+      streamsEnabled[port] = !streamsEnabled[port];
+      const img = document.getElementById(`stream-${port}`);
+      if (img) {
+        if (streamsEnabled[port]) {
+          img.src = `/api/stream/${port}`;
+          img.classList.remove('hidden');
+        } else {
+          img.src = '';
+          img.classList.add('hidden');
+        }
+      }
+      const btn = document.getElementById(`stream-btn-${port}`);
+      if (btn) {
+        btn.textContent = streamsEnabled[port] ? 'Hide Stream' : 'Show Stream';
+      }
+    }
+
+    function renderCameras() {
+      if (!state.cameras.length) return '';
+
+      return `
+        <div class="section">
+          <h2>Cameras</h2>
+          <div class="camera-grid">
+            ${state.cameras.map(cam => `
+              <div class="camera-card ${cam.state === 'recording' ? 'recording' : ''}">
+                <div class="camera-header">
+                  <div class="camera-role">
+                    <span class="status-dot ${cam.state}"></span>
+                    ${cam.role || cam.device_id.slice(-4)}
+                  </div>
+                  ${cam.stream_port ? `
+                    <button class="stream-toggle" id="stream-btn-${cam.stream_port}"
+                            onclick="toggleStream(${cam.stream_port})">
+                      ${streamsEnabled[cam.stream_port] ? 'Hide Stream' : 'Show Stream'}
+                    </button>
+                  ` : ''}
+                </div>
+                <div class="camera-stats">
+                  <span>${cam.battery_pct ?? '??'}%</span>
+                  <span>${cam.storage_gb ? cam.storage_gb + ' GB' : '??'}</span>
+                  <span>${cam.connection || '-'}</span>
+                </div>
+                ${cam.stream_port ? `
+                  <img id="stream-${cam.stream_port}"
+                       class="camera-stream ${streamsEnabled[cam.stream_port] ? '' : 'hidden'}"
+                       src="${streamsEnabled[cam.stream_port] ? '/api/stream/' + cam.stream_port : ''}"
+                       alt="Stream">
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTakes() {
+      if (!state.takes.length) return '';
+
+      return `
+        <div class="section">
+          <h2>Takes</h2>
+          <div class="take-list">
+            ${state.takes.map(take => `
+              <div class="take-item ${take.is_recording ? 'recording' : ''}">
+                <div>
+                  <span class="take-number">#${take.take_number}</span>
+                  <span class="take-label">${take.label || ''}</span>
+                </div>
+                <div class="take-duration">
+                  ${take.is_recording ? 'Recording...' : (take.duration_sec ? take.duration_sec + 's' : '-')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Actions
+    async function refresh() {
+      try {
+        state = await api('/api/status');
+        render();
+      } catch (e) {
+        console.error('Refresh failed:', e);
+      }
+    }
+
+    function openNewSessionModal() {
+      document.getElementById('new-session-modal').classList.add('active');
+      document.getElementById('session-name').value = '';
+      document.getElementById('session-participant').value = '';
+      document.getElementById('session-name').focus();
+    }
+
+    function closeModal() {
+      document.getElementById('new-session-modal').classList.remove('active');
+    }
+
+    async function createSession() {
+      const name = document.getElementById('session-name').value.trim() || null;
+      const participant = document.getElementById('session-participant').value.trim() || null;
+
+      try {
+        const res = await api('/api/session/init', 'POST', { name, participant });
+        if (res.ok) {
+          showMessage(`Session created: ${res.session_id}`, 'success');
+          closeModal();
+          refresh();
+        } else {
+          showMessage(res.error || 'Failed to create session');
+        }
+      } catch (e) {
+        showMessage('Failed to create session: ' + e.message);
+      }
+    }
+
+    async function closeSession() {
+      if (!confirm('Close this session?')) return;
+
+      try {
+        const res = await api('/api/session/close', 'POST', { force: false });
+        if (res.ok) {
+          showMessage('Session closed', 'success');
+          refresh();
+        } else {
+          showMessage(res.error || 'Failed to close session');
+        }
+      } catch (e) {
+        showMessage('Failed to close session: ' + e.message);
+      }
+    }
+
+    let pendingTakeLabel = null;
+
+    async function startTake(force = false) {
+      const label = document.getElementById('take-label')?.value.trim() || null;
+      pendingTakeLabel = label;
+
+      try {
+        const res = await api('/api/take/start', 'POST', { label, force });
+        if (res.ok) {
+          showMessage(`Take ${res.take_number} started`, 'success');
+          refresh();
+        } else if (res.error === 'devices_not_ready') {
+          // Show custom confirmation modal
+          document.getElementById('force-start-message').textContent =
+            res.message || 'Some devices not ready. Continue anyway?';
+          document.getElementById('force-start-modal').classList.add('active');
+        } else {
+          showMessage(res.error || 'Failed to start take');
+        }
+      } catch (e) {
+        showMessage('Failed to start take: ' + e.message);
+      }
+    }
+
+    function confirmForceStart() {
+      document.getElementById('force-start-modal').classList.remove('active');
+      startTake(true);  // Retry with force=true
+    }
+
+    function closeForceModal() {
+      document.getElementById('force-start-modal').classList.remove('active');
+    }
+
+    async function stopTake() {
+      try {
+        const res = await api('/api/take/stop', 'POST', {});
+        if (res.ok) {
+          showMessage(`Take ${res.take_number} stopped`, 'success');
+          refresh();
+        } else {
+          showMessage(res.error || 'Failed to stop take');
+        }
+      } catch (e) {
+        showMessage('Failed to stop take: ' + e.message);
+      }
+    }
+
+    // Init
+    refresh();
+    pollInterval = setInterval(refresh, 2000);
+
+    // Handle Enter key in modal
+    document.getElementById('session-participant').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') createSession();
+    });
+    document.getElementById('session-name').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') document.getElementById('session-participant').focus();
+    });
+  </script>
+</body>
+</html>

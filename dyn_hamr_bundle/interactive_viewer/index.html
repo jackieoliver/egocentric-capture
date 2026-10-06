@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Tracking Viewer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d0d1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%);
+            padding: 16px 24px;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #00d4aa;
+        }
+
+        header .subtitle {
+            font-size: 13px;
+            color: #666;
+            margin-left: 12px;
+        }
+
+        /* Main layout */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            padding: 16px;
+            height: calc(100vh - 180px);
+        }
+
+        /* Panels */
+        .panel {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 12px 16px;
+            background: #22223a;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #00d4aa;
+        }
+
+        .panel-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Video panel */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* 3D panel */
+        #three-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Camera selector */
+        .camera-tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .camera-tab {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid #3a3a5a;
+            color: #888;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .camera-tab:hover {
+            background: #2a2a4a;
+            color: #fff;
+        }
+
+        .camera-tab.active {
+            background: #00d4aa;
+            border-color: #00d4aa;
+            color: #0d0d1a;
+        }
+
+        /* Controls bar */
+        .controls-bar {
+            background: #1a1a2e;
+            padding: 16px 24px;
+            border-top: 1px solid #2a2a4a;
+        }
+
+        .timeline-container {
+            margin-bottom: 12px;
+        }
+
+        #timeline {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #2a2a4a;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #timeline::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #00d4aa;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 212, 170, 0.4);
+        }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #00d4aa;
+            color: #0d0d1a;
+        }
+
+        .btn-primary:hover {
+            background: #00e6bb;
+        }
+
+        .btn-secondary {
+            background: #2a2a4a;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a5a;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            min-width: 36px;
+            justify-content: center;
+        }
+
+        /* Speed control */
+        #speed-select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: #2a2a4a;
+            border: 1px solid #3a3a5a;
+            color: #e0e0e0;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        /* Frame counter */
+        .frame-display {
+            font-family: 'SF Mono', 'Monaco', monospace;
+            font-size: 13px;
+            color: #00d4aa;
+            background: #22223a;
+            padding: 6px 12px;
+            border-radius: 6px;
+            min-width: 180px;
+            text-align: center;
+        }
+
+        /* Loop markers */
+        .loop-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #loop-toggle {
+            width: 40px;
+            height: 22px;
+            border-radius: 11px;
+            background: #2a2a4a;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        #loop-toggle.active {
+            background: #00d4aa;
+        }
+
+        #loop-toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            transition: transform 0.2s;
+        }
+
+        #loop-toggle.active::after {
+            transform: translateX(18px);
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-left: auto;
+        }
+
+        .status-item {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status-item span {
+            color: #00d4aa;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 13, 26, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid #2a2a4a;
+            border-top-color: #00d4aa;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* File input */
+        .file-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .file-input-label {
+            padding: 6px 12px;
+            background: #2a2a4a;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-input-label:hover {
+            background: #3a3a5a;
+        }
+
+        .file-input-label input {
+            display: none;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 16px;
+            padding: 8px 16px;
+            background: #22223a;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+
+            .panel {
+                min-height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading hand tracking data...</div>
+    </div>
+
+    <header>
+        <div style="display: flex; align-items: center;">
+            <h1>Hand Tracking Viewer</h1>
+            <span class="subtitle">Dyn-HaMR MANO Visualization</span>
+        </div>
+        <div class="file-input-group">
+            <label class="file-input-label">
+                Load JSON
+                <input type="file" id="json-input" accept=".json">
+            </label>
+            <label class="file-input-label">
+                Load Video
+                <input type="file" id="video-input" accept="video/*">
+            </label>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Video Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">2D Overlay</span>
+                <div class="camera-tabs">
+                    <button class="camera-tab active" data-camera="head">HEAD</button>
+                    <button class="camera-tab" data-camera="lwrist">LWRIST</button>
+                    <button class="camera-tab" data-camera="rwrist">RWRIST</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div class="video-wrapper">
+                    <video id="video" muted playsinline></video>
+                    <canvas id="overlay-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3D Panel -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">3D View</span>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FFFF00;"></div>
+                        <span>Index</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00FF00;"></div>
+                        <span>Middle</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF0000;"></div>
+                        <span>Pinky</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00FFFF;"></div>
+                        <span>Ring</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF14FF;"></div>
+                        <span>Thumb</span>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="three-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-bar">
+        <div class="timeline-container">
+            <input type="range" id="timeline" min="0" max="1000" value="0" step="1">
+        </div>
+        <div class="controls-row">
+            <div class="control-group">
+                <button class="btn btn-secondary btn-icon" id="step-back" title="Previous frame (←)">
+                    ⏮
+                </button>
+                <button class="btn btn-primary" id="play-pause" title="Play/Pause (Space)">
+                    ▶ Play
+                </button>
+                <button class="btn btn-secondary btn-icon" id="step-forward" title="Next frame (→)">
+                    ⏭
+                </button>
+            </div>
+
+            <div class="control-group">
+                <span class="control-label">Speed:</span>
+                <select id="speed-select">
+                    <option value="0.25">0.25x</option>
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2x</option>
+                </select>
+            </div>
+
+            <div class="control-group loop-controls">
+                <span class="control-label">Loop:</span>
+                <button id="loop-toggle" class="active"></button>
+                <button class="btn btn-secondary" id="set-loop-in" title="Set loop start (I)">In</button>
+                <button class="btn btn-secondary" id="set-loop-out" title="Set loop end (O)">Out</button>
+                <button class="btn btn-secondary" id="clear-loop" title="Clear loop (C)">Clear</button>
+            </div>
+
+            <div class="frame-display" id="frame-display">
+                Frame: 0 / 0 | 0.00s
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">Hands: <span id="hand-count">0</span></div>
+                <div class="status-item">FPS: <span id="data-fps">30</span></div>
+                <button class="btn btn-secondary" id="export-btn" title="Export frame (E)">
+                    📷 Export
+                </button>
+                <button class="btn btn-secondary" id="recenter-btn" title="Recenter 3D view (R)">
+                    🎯 Recenter
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Configuration
+        // ═══════════════════════════════════════════════════════════════════
+
+        const CONFIG = {
+            videos: {
+                head: 'head_quarter.mp4',
+                lwrist: 'lwrist_quarter.mp4',
+                rwrist: 'rwrist_quarter.mp4',
+            },
+            handsJson: 'hands.json',
+            videoFps: 60,
+            handFps: 30,
+        };
+
+        // Skeleton structure
+        const HAND_EDGES = [
+            [0, 1], [1, 2], [2, 3],      // Index
+            [0, 4], [4, 5], [5, 6],      // Middle
+            [0, 7], [7, 8], [8, 9],      // Pinky
+            [0, 10], [10, 11], [11, 12], // Ring
+            [0, 13], [13, 14], [14, 15], // Thumb
+        ];
+
+        const FINGER_COLORS = {
+            index:  '#FFFF00',
+            middle: '#00FF00',
+            pinky:  '#FF0000',
+            ring:   '#00FFFF',
+            thumb:  '#FF14FF',
+        };
+
+        const EDGE_TO_FINGER = {
+            '0,1': 'index', '1,2': 'index', '2,3': 'index',
+            '0,4': 'middle', '4,5': 'middle', '5,6': 'middle',
+            '0,7': 'pinky', '7,8': 'pinky', '8,9': 'pinky',
+            '0,10': 'ring', '10,11': 'ring', '11,12': 'ring',
+            '0,13': 'thumb', '13,14': 'thumb', '14,15': 'thumb',
+        };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // State
+        // ═══════════════════════════════════════════════════════════════════
+
+        let handData = null;
+        let intrinsics = null;
+        let currentCamera = 'head';
+        let isPlaying = false;
+        let playbackSpeed = 1;
+        let loopEnabled = true;
+        let loopIn = 0;
+        let loopOut = 1;
+        let currentFrame = 0;
+        let totalFrames = 0;
+
+        // DOM elements
+        const video = document.getElementById('video');
+        const overlayCanvas = document.getElementById('overlay-canvas');
+        const ctx = overlayCanvas.getContext('2d');
+        const threeContainer = document.getElementById('three-container');
+        const timeline = document.getElementById('timeline');
+        const frameDisplay = document.getElementById('frame-display');
+        const playPauseBtn = document.getElementById('play-pause');
+        const loadingOverlay = document.getElementById('loading');
+
+        // Three.js
+        let scene, camera, renderer, controls;
+        let handMeshes = [];
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Initialization
+        // ═══════════════════════════════════════════════════════════════════
+
+        async function init() {
+            initThree();
+            initControls();
+            await loadData();
+            loadingOverlay.classList.add('hidden');
+            animate();
+        }
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            const rect = threeContainer.getBoundingClientRect();
+            camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 0.01, 100);
+            camera.position.set(0, 0.3, 0.8);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(rect.width, rect.height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            threeContainer.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.target.set(0, 0, 0.4);
+            controls.update();
+
+            // Grid
+            const gridHelper = new THREE.GridHelper(1, 10, 0x444466, 0x333355);
+            gridHelper.rotation.x = Math.PI / 2;
+            scene.add(gridHelper);
+
+            // Axes
+            const axesHelper = new THREE.AxesHelper(0.1);
+            scene.add(axesHelper);
+
+            // Ambient light
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+
+            // Resize handler for 3D view
+            window.addEventListener('resize', () => {
+                const rect = threeContainer.getBoundingClientRect();
+                camera.aspect = rect.width / rect.height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(rect.width, rect.height);
+                // Also update 2D overlay on resize
+                update2DOverlay(currentFrame);
+            });
+
+            // ResizeObserver for video container - handles flex layout changes
+            const videoWrapper = document.querySelector('.video-wrapper');
+            const resizeObserver = new ResizeObserver(() => {
+                update2DOverlay(currentFrame);
+            });
+            resizeObserver.observe(videoWrapper);
+
+            // Update overlay when video metadata loads (to get correct aspect ratio)
+            video.addEventListener('loadedmetadata', () => {
+                update2DOverlay(currentFrame);
+            });
+        }
+
+        async function loadData() {
+            // Load video
+            video.src = CONFIG.videos[currentCamera];
+            await new Promise(resolve => {
+                video.onloadedmetadata = resolve;
+                video.onerror = () => {
+                    console.warn('Video not found, waiting for file upload');
+                    resolve();
+                };
+            });
+
+            // Load hand data
+            try {
+                const response = await fetch(CONFIG.handsJson);
+                handData = await response.json();
+                totalFrames = handData.num_frames;
+                intrinsics = handData.intrinsics;
+
+                document.getElementById('hand-count').textContent = handData.num_hands;
+                document.getElementById('data-fps').textContent = handData.fps;
+
+                timeline.max = totalFrames - 1;
+                loopOut = 1;
+
+                createHandMeshes();
+                updateFrame(0);
+            } catch (e) {
+                console.warn('Hand data not found, waiting for file upload');
+            }
+        }
+
+        function createHandMeshes() {
+            // Clear existing
+            handMeshes.forEach(m => scene.remove(m.group));
+            handMeshes = [];
+
+            if (!handData) return;
+
+            handData.hands.forEach((hand, idx) => {
+                const group = new THREE.Group();
+                const joints = [];
+                const bones = [];
+
+                // Create joints
+                for (let i = 0; i < 16; i++) {
+                    const geo = new THREE.SphereGeometry(i === 0 ? 0.008 : 0.005);
+                    const color = i === 0 ? 0xffffff : (hand.is_right ? 0x00d4aa : 0x3498db);
+                    const mat = new THREE.MeshBasicMaterial({ color });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    joints.push(mesh);
+                    group.add(mesh);
+                }
+
+                // Create bones
+                HAND_EDGES.forEach(([i, j]) => {
+                    const finger = EDGE_TO_FINGER[`${i},${j}`];
+                    const color = new THREE.Color(FINGER_COLORS[finger]);
+                    const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,0], 3));
+                    const line = new THREE.Line(geo, mat);
+                    bones.push({ line, i, j });
+                    group.add(line);
+                });
+
+                scene.add(group);
+                handMeshes.push({ group, joints, bones, isRight: hand.is_right });
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Controls
+        // ═══════════════════════════════════════════════════════════════════
+
+        function initControls() {
+            // Play/Pause
+            playPauseBtn.addEventListener('click', togglePlay);
+
+            // Timeline
+            timeline.addEventListener('input', (e) => {
+                const frame = parseInt(e.target.value);
+                seekToFrame(frame);
+            });
+
+            // Speed
+            document.getElementById('speed-select').addEventListener('change', (e) => {
+                playbackSpeed = parseFloat(e.target.value);
+                video.playbackRate = playbackSpeed;
+            });
+
+            // Step buttons
+            document.getElementById('step-back').addEventListener('click', () => stepFrame(-1));
+            document.getElementById('step-forward').addEventListener('click', () => stepFrame(1));
+
+            // Loop
+            document.getElementById('loop-toggle').addEventListener('click', (e) => {
+                loopEnabled = !loopEnabled;
+                e.target.classList.toggle('active', loopEnabled);
+            });
+            document.getElementById('set-loop-in').addEventListener('click', () => {
+                loopIn = currentFrame / totalFrames;
+            });
+            document.getElementById('set-loop-out').addEventListener('click', () => {
+                loopOut = currentFrame / totalFrames;
+            });
+            document.getElementById('clear-loop').addEventListener('click', () => {
+                loopIn = 0;
+                loopOut = 1;
+            });
+
+            // Camera tabs
+            document.querySelectorAll('.camera-tab').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    document.querySelectorAll('.camera-tab').forEach(t => t.classList.remove('active'));
+                    e.target.classList.add('active');
+                    switchCamera(e.target.dataset.camera);
+                });
+            });
+
+            // Export
+            document.getElementById('export-btn').addEventListener('click', exportFrame);
+
+            // Recenter
+            document.getElementById('recenter-btn').addEventListener('click', recenter3D);
+
+            // File inputs
+            document.getElementById('json-input').addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const text = await file.text();
+                    handData = JSON.parse(text);
+                    totalFrames = handData.num_frames;
+                    intrinsics = handData.intrinsics;
+                    timeline.max = totalFrames - 1;
+                    document.getElementById('hand-count').textContent = handData.num_hands;
+                    document.getElementById('data-fps').textContent = handData.fps;
+                    createHandMeshes();
+                    updateFrame(0);
+                }
+            });
+
+            document.getElementById('video-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    video.src = URL.createObjectURL(file);
+                }
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                switch (e.key) {
+                    case ' ': e.preventDefault(); togglePlay(); break;
+                    case 'ArrowLeft': stepFrame(-1); break;
+                    case 'ArrowRight': stepFrame(1); break;
+                    case 'i': case 'I': document.getElementById('set-loop-in').click(); break;
+                    case 'o': case 'O': document.getElementById('set-loop-out').click(); break;
+                    case 'c': case 'C': document.getElementById('clear-loop').click(); break;
+                    case 'e': case 'E': exportFrame(); break;
+                    case 'r': case 'R': recenter3D(); break;
+                }
+            });
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                video.play();
+                playPauseBtn.innerHTML = '⏸ Pause';
+            } else {
+                video.pause();
+                playPauseBtn.innerHTML = '▶ Play';
+            }
+        }
+
+        function seekToFrame(frame) {
+            currentFrame = Math.max(0, Math.min(frame, totalFrames - 1));
+            const time = currentFrame / CONFIG.handFps;
+            video.currentTime = time;
+            updateFrame(currentFrame);
+        }
+
+        function stepFrame(delta) {
+            if (isPlaying) togglePlay();
+            seekToFrame(currentFrame + delta);
+        }
+
+        function switchCamera(cam) {
+            currentCamera = cam;
+            video.src = CONFIG.videos[cam];
+            video.currentTime = currentFrame / CONFIG.handFps;
+        }
+
+        function recenter3D() {
+            if (!handData || !handData.hands.length) return;
+
+            // Find center of all hands at current frame
+            let sum = [0, 0, 0];
+            let count = 0;
+
+            handData.hands.forEach(hand => {
+                const joints = hand.frames[currentFrame].joints3d;
+                joints.forEach(j => {
+                    sum[0] += j[0];
+                    sum[1] += j[1];
+                    sum[2] += j[2];
+                    count++;
+                });
+            });
+
+            if (count > 0) {
+                controls.target.set(sum[0]/count, sum[1]/count, sum[2]/count);
+                controls.update();
+            }
+        }
+
+        function exportFrame() {
+            // Create combined canvas
+            const exportCanvas = document.createElement('canvas');
+            const w = overlayCanvas.width;
+            const h = overlayCanvas.height;
+            exportCanvas.width = w * 2;
+            exportCanvas.height = h;
+
+            const exportCtx = exportCanvas.getContext('2d');
+
+            // Draw video + overlay
+            exportCtx.drawImage(video, 0, 0, w, h);
+            exportCtx.drawImage(overlayCanvas, 0, 0, w, h);
+
+            // Draw 3D view
+            renderer.render(scene, camera);
+            exportCtx.drawImage(renderer.domElement, w, 0, w, h);
+
+            // Download
+            const link = document.createElement('a');
+            link.download = `frame_${currentFrame.toString().padStart(4, '0')}.png`;
+            link.href = exportCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Rendering
+        // ═══════════════════════════════════════════════════════════════════
+
+        function updateFrame(frame) {
+            currentFrame = frame;
+            timeline.value = frame;
+
+            const time = frame / CONFIG.handFps;
+            frameDisplay.textContent = `Frame: ${frame} / ${totalFrames} | ${time.toFixed(2)}s`;
+
+            update2DOverlay(frame);
+            update3DView(frame);
+        }
+
+        function update2DOverlay(frame) {
+            if (!handData || !intrinsics) return;
+
+            // Get container dimensions
+            const containerRect = video.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+
+            // Skip if container has no valid dimensions yet
+            if (containerRect.width < 10 || containerRect.height < 10) return;
+
+            // Resize canvas to match container
+            overlayCanvas.width = containerRect.width * dpr;
+            overlayCanvas.height = containerRect.height * dpr;
+            overlayCanvas.style.width = containerRect.width + 'px';
+            overlayCanvas.style.height = containerRect.height + 'px';
+
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            // CRITICAL: The 2D joint coordinates are in INTRINSIC coordinate space
+            // (based on fx, fy, cx, cy), NOT the actual video pixel dimensions.
+            // We must scale from intrinsic space to display space.
+            const intrinsicWidth = intrinsics.cx * 2;   // e.g., 960 * 2 = 1920
+            const intrinsicHeight = intrinsics.cy * 2;  // e.g., 540 * 2 = 1080
+            const intrinsicAspect = intrinsicWidth / intrinsicHeight;
+
+            // Use video's actual aspect ratio for letterbox calculation (if available),
+            // otherwise fall back to intrinsic aspect (which should match for correct data)
+            const videoAspect = (video.videoWidth && video.videoHeight)
+                ? video.videoWidth / video.videoHeight
+                : intrinsicAspect;
+
+            // Calculate letterbox dimensions (object-fit: contain)
+            const containerAspect = containerRect.width / containerRect.height;
+
+            let displayWidth, displayHeight, offsetX, offsetY;
+
+            if (containerAspect > videoAspect) {
+                // Container is wider - horizontal letterbox (black bars on sides)
+                displayHeight = containerRect.height;
+                displayWidth = displayHeight * videoAspect;
+                offsetX = (containerRect.width - displayWidth) / 2;
+                offsetY = 0;
+            } else {
+                // Container is taller - vertical letterbox (black bars top/bottom)
+                displayWidth = containerRect.width;
+                displayHeight = displayWidth / videoAspect;
+                offsetX = 0;
+                offsetY = (containerRect.height - displayHeight) / 2;
+            }
+
+            // Scale factors: map INTRINSIC coordinate space to displayed pixels
+            // This correctly handles quarter/half resolution videos since we scale
+            // from the original coordinate space, not the video pixel dimensions.
+            const scaleX = (displayWidth * dpr) / intrinsicWidth;
+            const scaleY = (displayHeight * dpr) / intrinsicHeight;
+            const offsetXPx = offsetX * dpr;
+            const offsetYPx = offsetY * dpr;
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // DEBUG: Draw video content bounds (red rectangle)
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(offsetXPx, offsetYPx, displayWidth * dpr, displayHeight * dpr);
+
+            // DEBUG: Log values once
+            if (frame === 0 && !window._debugLogged) {
+                window._debugLogged = true;
+                console.log('DEBUG overlay:', {
+                    containerRect: { w: containerRect.width, h: containerRect.height },
+                    intrinsic: { w: intrinsicWidth, h: intrinsicHeight },
+                    videoActual: { w: video.videoWidth, h: video.videoHeight },
+                    display: { w: displayWidth, h: displayHeight },
+                    offset: { x: offsetX, y: offsetY },
+                    scale: { x: scaleX, y: scaleY },
+                    dpr: dpr
+                });
+            }
+
+            handData.hands.forEach(hand => {
+                const joints2d = hand.frames[frame].joints2d;
+
+                // Draw bones
+                ctx.lineWidth = 3 * dpr;
+                HAND_EDGES.forEach(([i, j]) => {
+                    const finger = EDGE_TO_FINGER[`${i},${j}`];
+                    const p1 = joints2d[i];
+                    const p2 = joints2d[j];
+
+                    ctx.strokeStyle = FINGER_COLORS[finger];
+                    ctx.beginPath();
+                    ctx.moveTo(p1[0] * scaleX + offsetXPx, p1[1] * scaleY + offsetYPx);
+                    ctx.lineTo(p2[0] * scaleX + offsetXPx, p2[1] * scaleY + offsetYPx);
+                    ctx.stroke();
+                });
+
+                // Draw joints
+                joints2d.forEach((j, idx) => {
+                    const x = j[0] * scaleX + offsetXPx;
+                    const y = j[1] * scaleY + offsetYPx;
+                    const r = (idx === 0 ? 6 : 4) * dpr;
+
+                    ctx.fillStyle = idx === 0 ? '#ffffff' : (hand.is_right ? '#00d4aa' : '#3498db');
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            });
+        }
+
+        function update3DView(frame) {
+            if (!handData) return;
+
+            handMeshes.forEach((handMesh, idx) => {
+                const hand = handData.hands[idx];
+                const joints3d = hand.frames[frame].joints3d;
+
+                // Update joint positions
+                handMesh.joints.forEach((mesh, i) => {
+                    mesh.position.set(joints3d[i][0], joints3d[i][1], joints3d[i][2]);
+                });
+
+                // Update bone positions
+                handMesh.bones.forEach(bone => {
+                    const p1 = joints3d[bone.i];
+                    const p2 = joints3d[bone.j];
+                    const positions = bone.line.geometry.attributes.position.array;
+                    positions[0] = p1[0]; positions[1] = p1[1]; positions[2] = p1[2];
+                    positions[3] = p2[0]; positions[4] = p2[1]; positions[5] = p2[2];
+                    bone.line.geometry.attributes.position.needsUpdate = true;
+                });
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Sync with video
+            if (isPlaying && video.duration) {
+                const videoTime = video.currentTime;
+                const frame = Math.floor(videoTime * CONFIG.handFps);
+
+                // Loop handling
+                if (loopEnabled && totalFrames > 0) {
+                    const loopStart = Math.floor(loopIn * totalFrames);
+                    const loopEnd = Math.floor(loopOut * totalFrames);
+                    if (frame >= loopEnd || frame < loopStart) {
+                        video.currentTime = loopStart / CONFIG.handFps;
+                    }
+                }
+
+                if (frame !== currentFrame && frame < totalFrames) {
+                    updateFrame(frame);
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
